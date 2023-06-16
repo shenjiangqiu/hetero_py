@@ -1,6 +1,9 @@
-from types import List
+# %%
+from typing import List
 
+from attr import dataclass
 
+@dataclass
 class Metapath:
-    def __init__(self,nodes:List[str]) -> None:
-        pass
+    name:str
+    metapath : List[List[str]]
