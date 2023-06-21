@@ -1,2 +1,5 @@
 [workspace]
 members = ["rust/hetero_rust"]
+
+[profile.release]
+lto = true

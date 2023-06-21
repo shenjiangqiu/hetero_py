@@ -1,13 +1,13 @@
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::BufReader,
-    path::{Path, PathBuf},
-};
-
 use itertools::Itertools;
 use rayon::prelude::*;
 use sprs::{num_kinds::Pattern, CsMatI, CsVecI, TriMatI};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+    sync::{atomic::AtomicUsize, RwLock},
+};
 
 pub fn load_graph(graph_path: &Path) -> eyre::Result<CsMatI<Pattern, u32>> {
     let mut file = BufReader::new(File::open(graph_path)?);
@@ -37,7 +37,7 @@ pub fn load_hetero_graph(graph_path: impl AsRef<Path>) -> eyre::Result<HeteroGra
     }
     Ok(HeteroGraph { subgraphs })
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metapath {
     path: Vec<String>,
 }
@@ -124,17 +124,37 @@ pub fn count_metapath_memory_usage(graph: &HeteroGraph, metapath: &Metapath) -> 
     let first_edge_type = (metapath.path[0].clone(), metapath.path[1].clone());
     let first_graph = graph.subgraphs.get(&first_edge_type).unwrap();
     let rows = first_graph.rows();
+    let count_cache = RwLock::new(BTreeMap::new());
+    let finished_tasks = AtomicUsize::new(0);
     let count = (0..rows)
         .into_par_iter()
-        .map(|i| count_partial_metapath_count(graph, &metapath.path[0..], i))
+        .map(|i| {
+            let count = count_partial_metapath_count(graph, &metapath.path[0..], i, &count_cache);
+            finished_tasks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::info!(
+                "finished tasks: {}/{}",
+                finished_tasks.load(std::sync::atomic::Ordering::Relaxed),
+                rows
+            );
+            count
+        })
         .sum::<usize>();
     count * 4
 }
+
 pub fn count_partial_metapath_count(
     graph: &HeteroGraph,
     partial_metapath: &[String],
     start_node: usize,
+    count_cache: &RwLock<BTreeMap<(usize, usize), usize>>,
 ) -> usize {
+    assert!(partial_metapath.len() > 2);
+    let current_count = count_cache.read().unwrap();
+    if let Some(count) = current_count.get(&(start_node, partial_metapath.len())) {
+        return *count;
+    }
+    drop(current_count);
+
     if partial_metapath.len() == 2 {
         let edge_type = (partial_metapath[0].clone(), partial_metapath[1].clone());
 
@@ -142,9 +162,13 @@ pub fn count_partial_metapath_count(
 
         let neighbers = sub_graph.outer_view(start_node).unwrap();
         tracing::debug!(start_node, "final neighbers: {:?}", neighbers.nnz());
-        neighbers.nnz()
+        let count = neighbers.nnz();
+        count_cache
+            .write()
+            .unwrap()
+            .insert((start_node, partial_metapath.len()), count);
+        count
     } else {
-        assert!(partial_metapath.len() > 2);
         let edge_type = (partial_metapath[0].clone(), partial_metapath[1].clone());
 
         let sub_graph = graph.subgraphs.get(&edge_type).unwrap();
@@ -157,20 +181,32 @@ pub fn count_partial_metapath_count(
             );
             empty.view()
         });
-        let mut count = 0;
-        for col in neighbers.indices() {
-            tracing::debug!(start_node, "neighbers: {:?}", col);
-            count += count_partial_metapath_count(graph, &partial_metapath[1..], *col as usize);
-        }
+        let count = neighbers
+            .indices()
+            .into_iter()
+            .map(|col| {
+                tracing::debug!(start_node, "neighbers: {:?}", col);
+                count_partial_metapath_count(
+                    graph,
+                    &partial_metapath[1..],
+                    *col as usize,
+                    count_cache,
+                )
+            })
+            .sum();
         let meta_len = partial_metapath.len();
         tracing::debug!(start_node, meta_len, "temp neighbers: {:?}", count);
+
+        let mut current_count = count_cache.write().unwrap();
+        current_count.insert((start_node, meta_len), count);
+
         count
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{collections::BTreeMap, path::Path, sync::RwLock};
 
     use tracing_subscriber::EnvFilter;
 
@@ -200,6 +236,7 @@ mod tests {
             .unwrap_or(());
         let graph =
             load_hetero_graph(Path::new("/home/sjq/git/hetero_py/splited_graph/dblp")).unwrap();
+        let count_cache = RwLock::new(BTreeMap::new());
         let meta_path = count_partial_metapath_count(
             &graph,
             &[
@@ -210,6 +247,7 @@ mod tests {
                 "author".to_string(),
             ],
             0,
+            &count_cache,
         );
         println!("meta_path: {:?}", meta_path);
     }
