@@ -131,11 +131,11 @@ pub fn count_metapath_memory_usage(graph: &HeteroGraph, metapath: &Metapath) -> 
         .map(|i| {
             let count = count_partial_metapath_count(graph, &metapath.path[0..], i, &count_cache);
             finished_tasks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            tracing::info!(
-                "finished tasks: {}/{}",
-                finished_tasks.load(std::sync::atomic::Ordering::Relaxed),
-                rows
-            );
+            let finished_tasks = finished_tasks.load(std::sync::atomic::Ordering::Relaxed);
+            if finished_tasks % 10000 == 0 {
+                tracing::info!(?metapath, "finished tasks: {}/{}", finished_tasks, rows);
+            }
+
             count
         })
         .sum::<usize>();
@@ -148,7 +148,6 @@ pub fn count_partial_metapath_count(
     start_node: usize,
     count_cache: &RwLock<BTreeMap<(usize, usize), usize>>,
 ) -> usize {
-    assert!(partial_metapath.len() > 2);
     let current_count = count_cache.read().unwrap();
     if let Some(count) = current_count.get(&(start_node, partial_metapath.len())) {
         return *count;
