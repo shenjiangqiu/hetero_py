@@ -1,20 +1,26 @@
 use itertools::Itertools;
 use rayon::prelude::*;
+use sim::NodeTypeFeatureSize;
 use sprs::{num_kinds::Pattern, CsMatI, CsVecI, TriMatI};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::File,
+    hash::Hash,
     io::BufReader,
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, RwLock},
 };
 
-pub fn load_graph(graph_path: &Path) -> eyre::Result<CsMatI<Pattern, u32>> {
+pub mod sim;
+
+/// load a single graph from a mtx file
+fn load_graph(graph_path: &Path) -> eyre::Result<CsMatI<Pattern, u32>> {
     let mut file = BufReader::new(File::open(graph_path)?);
     let graph: TriMatI<Pattern, u32> = sprs::io::read_matrix_market_from_bufread(&mut file)?;
     Ok(graph.to_csr())
 }
 
+/// load the hetero graph from a dir, the mtx file name should be like "edge_type1$edge_type2.mtx"
 pub fn load_hetero_graph(graph_path: impl AsRef<Path>) -> eyre::Result<HeteroGraph> {
     // first read the dir, get all mtx files
     let mut subgraphs = HashMap::new();
@@ -37,6 +43,7 @@ pub fn load_hetero_graph(graph_path: impl AsRef<Path>) -> eyre::Result<HeteroGra
     }
     Ok(HeteroGraph { subgraphs })
 }
+
 #[derive(Debug, Clone)]
 pub struct Metapath {
     path: Vec<String>,
@@ -70,7 +77,7 @@ where
 
 #[derive(Debug)]
 pub struct HeteroGraph {
-    subgraphs: HashMap<(String, String), CsMatI<Pattern, u32>>,
+    pub subgraphs: HashMap<(String, String), CsMatI<Pattern, u32>>,
 }
 pub struct TaskPack {
     pub graph_name: String,
@@ -78,6 +85,73 @@ pub struct TaskPack {
     pub metapathes: MetaPathesPack,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DblpNodeType {
+    Author,
+    Paper,
+    Conference,
+    Term,
+}
+impl ToString for DblpNodeType {
+    fn to_string(&self) -> String {
+        match self {
+            DblpNodeType::Author => "author".to_string(),
+            DblpNodeType::Paper => "paper".to_string(),
+            DblpNodeType::Conference => "conference".to_string(),
+            DblpNodeType::Term => "term".to_string(),
+        }
+    }
+}
+impl sim::NodeTypeFeatureSize for DblpNodeType {
+    fn feature_size(&self) -> usize {
+        128
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ImdbNodeType {
+    Movie,
+    Director,
+    Actor,
+}
+impl ToString for ImdbNodeType {
+    fn to_string(&self) -> String {
+        match self {
+            ImdbNodeType::Movie => "movie".to_string(),
+            ImdbNodeType::Director => "director".to_string(),
+            ImdbNodeType::Actor => "actor".to_string(),
+        }
+    }
+}
+impl NodeTypeFeatureSize for ImdbNodeType {
+    fn feature_size(&self) -> usize {
+        128
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LastFmNodeType {
+    User,
+    Artist,
+    Tag,
+}
+impl ToString for LastFmNodeType {
+    fn to_string(&self) -> String {
+        match self {
+            LastFmNodeType::User => "user".to_string(),
+            LastFmNodeType::Artist => "artist".to_string(),
+            LastFmNodeType::Tag => "tag".to_string(),
+        }
+    }
+}
+impl NodeTypeFeatureSize for LastFmNodeType {
+    fn feature_size(&self) -> usize {
+        128
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeId<NodeType> {
+    pub layer: NodeType,
+    pub id: u32,
+}
 pub fn get_all_taskpack() -> Vec<TaskPack> {
     let graphs = ["dblp", "imdb", "last-fm", "ogb-mag"];
     let metapathes = [
@@ -120,6 +194,7 @@ pub fn get_all_taskpack() -> Vec<TaskPack> {
         .collect()
 }
 
+/// count the number of metapathes
 pub fn count_metapath_memory_usage(graph: &HeteroGraph, metapath: &Metapath) -> usize {
     let first_edge_type = (metapath.path[0].clone(), metapath.path[1].clone());
     let first_graph = graph.subgraphs.get(&first_edge_type).unwrap();
@@ -142,7 +217,7 @@ pub fn count_metapath_memory_usage(graph: &HeteroGraph, metapath: &Metapath) -> 
     count * 4
 }
 
-pub fn count_partial_metapath_count(
+fn count_partial_metapath_count(
     graph: &HeteroGraph,
     partial_metapath: &[String],
     start_node: usize,

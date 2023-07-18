@@ -1,3 +1,6 @@
 /data
 /dist
 /target
+/env
+__pycache__
+/splited_graph
