@@ -142,6 +142,23 @@ impl ToString for LastFmNodeType {
         }
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OgbMagNodeType {
+    Author,
+    Institution,
+    FieldOfStudy,
+    Paper,
+}
+impl ToString for OgbMagNodeType {
+    fn to_string(&self) -> String {
+        match self {
+            OgbMagNodeType::Author => "author".to_string(),
+            OgbMagNodeType::Institution => "institution".to_string(),
+            OgbMagNodeType::FieldOfStudy => "field_of_study".to_string(),
+            OgbMagNodeType::Paper => "paper".to_string(),
+        }
+    }
+}
 impl NodeTypeFeatureSize for LastFmNodeType {
     fn feature_size(&self) -> usize {
         128

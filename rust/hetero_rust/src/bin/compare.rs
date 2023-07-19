@@ -1,5 +1,7 @@
 use hashbrown::HashSet;
-use hetero_rust::{load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType, NodeId};
+use hetero_rust::{
+    load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType, NodeId, OgbMagNodeType,
+};
 use std::{fmt::Debug, hash::Hash, hint::black_box, path::Path};
 
 fn main() {
@@ -31,6 +33,15 @@ fn main() {
         LastFmNodeType::User,
     ];
     build_graph("splited_graph/last-fm", &metapath);
+    //vec!["author", "paper", "field_of_study", "paper", "author"],
+    let metapath = vec![
+        OgbMagNodeType::Author,
+        OgbMagNodeType::Paper,
+        OgbMagNodeType::FieldOfStudy,
+        OgbMagNodeType::Paper,
+        OgbMagNodeType::Author,
+    ];
+    build_graph("splited_graph/ogb-mag", &metapath);
 }
 fn build_graph<NodeType: ToString + Eq + Hash + Clone + Copy + Debug>(
     graph: impl AsRef<Path>,

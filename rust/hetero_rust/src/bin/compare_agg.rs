@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use hetero_rust::{load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType};
+use hetero_rust::{load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType, OgbMagNodeType};
 use itertools::Itertools;
 use rand::Rng;
 use std::{
@@ -39,6 +39,15 @@ fn main() {
         LastFmNodeType::User,
     ];
     build_graph("splited_graph/last-fm", &metapath);
+
+    let metapath = vec![
+        OgbMagNodeType::Author,
+        OgbMagNodeType::Paper,
+        OgbMagNodeType::FieldOfStudy,
+        OgbMagNodeType::Paper,
+        OgbMagNodeType::Author,
+    ];
+    build_graph("splited_graph/ogb-mag", &metapath);
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct MyFeature([i32; 128]);

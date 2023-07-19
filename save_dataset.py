@@ -46,12 +46,12 @@ def background(f):
     return wrapped
 
 
-@background
 def save_graph(graph_name):
     graph = load_graph(graph_name)
     save_dataset(graph_name, graph)
     del graph
 
 
-for graph_name in graph_names:
-    save_graph(graph_name)
+save_graph("ogb-mag")
+
+# %%
