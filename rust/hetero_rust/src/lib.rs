@@ -10,8 +10,26 @@ use std::{
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, RwLock},
 };
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 pub mod sim;
+
+pub fn init_log(filter: LevelFilter) {
+    let filter = EnvFilter::builder()
+        .with_default_directive(filter.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .try_init()
+        .unwrap_or_default();
+}
+pub fn init_log_info() {
+    init_log(LevelFilter::INFO);
+}
+pub fn init_log_error() {
+    init_log(LevelFilter::ERROR);
+}
 
 /// load a single graph from a mtx file
 fn load_graph(graph_path: &Path) -> eyre::Result<CsMatI<Pattern, u32>> {

@@ -31,6 +31,7 @@ where
         let mut current_set = HashSet::new();
         build_context_for_single_node(hetero_graph, metapath, &mut current_set, i);
         context.push(current_set);
+        tracing::debug!("finished node {}/{}", i, sub_graph.rows());
     }
     context
 }
