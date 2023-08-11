@@ -1,5 +1,7 @@
 use hashbrown::HashMap;
-use hetero_rust::{load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType, OgbMagNodeType};
+use hetero_rust::{
+    init_log_info, load_hetero_graph, DblpNodeType, ImdbNodeType, LastFmNodeType, OgbMagNodeType,
+};
 use itertools::Itertools;
 use rand::Rng;
 use std::{
@@ -9,8 +11,10 @@ use std::{
     ops::{AddAssign, SubAssign},
     path::Path,
 };
+use tracing::debug;
 
 fn main() {
+    init_log_info();
     let metapath = vec![
         DblpNodeType::Author,
         DblpNodeType::Paper,
@@ -81,8 +85,10 @@ fn build_graph<NodeType: ToString + Eq + Hash + Clone + Copy + Debug>(
         .unwrap()
         .to_string_lossy()
         .to_string();
+    let _span = tracing::info_span!("build_graph", graph_name = graph_name.as_str()).entered();
     let hetero_graph = load_hetero_graph(graph).unwrap();
     let node_rows: HashMap<NodeType, usize> = get_node_rows(&hetero_graph, meta_path);
+    debug!("node_rows: {:?}", node_rows);
     // first setup the initial context
     let mut node_features_store = HashMap::new();
     let mut rng = rand::thread_rng();

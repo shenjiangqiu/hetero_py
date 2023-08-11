@@ -6,6 +6,7 @@ use std::{
     hash::Hash,
     ops::{AddAssign, SubAssign},
 };
+use tracing::debug;
 
 use super::BuildContextFnAgg;
 pub struct DesignBuildContextAggFn;
@@ -36,6 +37,8 @@ where
     ResultType: AddAssign + SubAssign + Default + Clone + Copy,
 {
     if metapath.len() == 2 {
+        // the last two layer
+        debug!("building the last two layer");
         let sub_graph = hetero_graph
             .subgraphs
             .get(&(metapath[0].to_string(), metapath[1].to_string()))
@@ -43,6 +46,13 @@ where
         let mut context = Vec::with_capacity(sub_graph.rows());
         let mut results = Vec::with_capacity(sub_graph.rows());
         for (source_id, row_vec) in sub_graph.outer_iterator().enumerate() {
+            if source_id % 1000 == 0 {
+                debug!(
+                    "building the last two layer: {}/{}",
+                    source_id,
+                    sub_graph.rows()
+                );
+            }
             let mut current_set = HashSet::new();
             let mut current_result = ResultType::default();
             for neighbor in row_vec.indices() {
@@ -65,15 +75,26 @@ where
         }
         (context, results)
     } else {
+        // the first layer to the last two layer
+
         let sub_graph = hetero_graph
             .subgraphs
             .get(&(metapath[0].to_string(), metapath[1].to_string()))
             .unwrap();
-        let mut contexts = Vec::with_capacity(sub_graph.rows());
-        let mut results = Vec::with_capacity(sub_graph.rows());
         let (previous_contexts, previous_results) =
             build_context_and_aggregation(hetero_graph, &metapath[1..], node_features);
+        let mut contexts = Vec::with_capacity(sub_graph.rows());
+        let mut results = Vec::with_capacity(sub_graph.rows());
+
         for (source_id, row_vec) in sub_graph.outer_iterator().enumerate() {
+            if source_id % 1000 == 0 {
+                debug!(
+                    "building the first layer to the {} th layer: {}/{}",
+                    metapath.len(),
+                    source_id,
+                    sub_graph.rows()
+                );
+            }
             let mut new_context = HashSet::new();
             let mut new_result = ResultType::default();
             for neighbor in row_vec.indices() {
